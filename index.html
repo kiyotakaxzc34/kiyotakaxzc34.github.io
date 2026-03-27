@@ -57,3 +57,102 @@ button {
     <div id="menu">
         <button onclick="start()">СТАРТ</button>
     </div>
+    <div id="score">0</div>
+    <canvas id="c" width="160" height="240"></canvas>
+</div>
+
+<script>
+const c = document.getElementById("c");
+const ctx = c.getContext("2d");
+
+let bird, pipes, score, running = false;
+
+class Bird {
+    constructor() {
+        this.x = 40;
+        this.y = 100;
+        this.v = 0;
+    }
+    update() {
+        this.v += 0.25;
+        this.y += this.v;
+        if (this.y > 220 || this.y < -20) die();
+    }
+    draw() {
+        ctx.fillStyle = "yellow";
+        ctx.fillRect(this.x-5, this.y-5, 10, 10);
+    }
+}
+
+class Pipe {
+    constructor(x) {
+        this.x = x;
+        this.h = Math.random()*80+40;
+        this.passed = false;
+    }
+    draw() {
+        ctx.fillStyle = "green";
+        ctx.fillRect(this.x, 0, 20, this.h);
+        ctx.fillRect(this.x, this.h+70, 20, 240);
+    }
+}
+
+function start() {
+    bird = new Bird();
+    pipes = [new Pipe(180)];
+    score = 0;
+    running = true;
+    document.getElementById("menu").style.display = "none";
+    loop();
+}
+
+function die() {
+    running = false;
+    document.getElementById("menu").style.display = "flex";
+}
+
+function loop() {
+    if (!running) return;
+
+    ctx.clearRect(0,0,160,240);
+
+    ctx.fillStyle = "#ded895";
+    ctx.fillRect(0,226,160,14);
+
+    bird.update();
+    bird.draw();
+
+    if (pipes[pipes.length-1].x < 90) pipes.push(new Pipe(160));
+
+    for (let i=pipes.length-1;i>=0;i--) {
+        pipes[i].x -= 1.5;
+        pipes[i].draw();
+
+        if (bird.x+5 > pipes[i].x && bird.x-5 < pipes[i].x+20) {
+            if (bird.y < pipes[i].h || bird.y > pipes[i].h+70) die();
+        }
+
+        if (!pipes[i].passed && bird.x > pipes[i].x+20) {
+            score++;
+            pipes[i].passed = true;
+            document.getElementById("score").innerText = score;
+        }
+
+        if (pipes[i].x < -20) pipes.splice(i,1);
+    }
+
+    requestAnimationFrame(loop);
+}
+
+function jump() {
+    if (running) bird.v = -4;
+}
+
+window.addEventListener("click", jump);
+window.addEventListener("keydown", e => {
+    if (e.code === "Space") jump();
+});
+</script>
+
+</body>
+</html>
