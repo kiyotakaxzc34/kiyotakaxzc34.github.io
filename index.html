@@ -55,13 +55,13 @@ button {
 
 <div id="game">
     <div id="menu">
-        <button onclick="start()">СТАРТ</button>
+        <button id="startBtn">СТАРТ</button>
     </div>
     <div id="score">0</div>
     <canvas id="c" width="160" height="240"></canvas>
 </div>
 
-<script>
+<script defer>
 const c = document.getElementById("c");
 const ctx = c.getContext("2d");
 
@@ -103,6 +103,7 @@ function start() {
     score = 0;
     running = true;
     document.getElementById("menu").style.display = "none";
+    document.getElementById("score").innerText = "0";
     loop();
 }
 
@@ -148,7 +149,10 @@ function jump() {
     if (running) bird.v = -4;
 }
 
-window.addEventListener("click", jump);
+// НОРМАЛЬНЫЕ обработчики (работают везде)
+document.getElementById("startBtn").addEventListener("click", start);
+window.addEventListener("touchstart", jump, {passive: true});
+window.addEventListener("mousedown", jump);
 window.addEventListener("keydown", e => {
     if (e.code === "Space") jump();
 });
