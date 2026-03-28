@@ -1,3 +1,277 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pixel Dungeon - 16:9 Aspect Ratio</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #0d0d12;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            touch-action: none;
+        }
+        #canvas-container {
+            position: relative;
+            /* Обеспечиваем контейнер 16:9 */
+            width: 95vw;
+            aspect-ratio: 16 / 9;
+            max-height: 90vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        canvas {
+            image-rendering: pixelated;
+            border: 4px solid #1a1a24;
+            background: #15151b;
+            width: 100%;
+            height: 100%;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+        }
+        #joystick-zone {
+            position: fixed;
+            bottom: 30px;
+            left: 30px;
+            width: 100px;
+            height: 100px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+        #joystick-knob {
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            position: absolute;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container">
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <div id="joystick-zone">
+        <div id="joystick-knob"></div>
+    </div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+const TILE_SIZE = 16;
+const SCALE = 3;
+const SZ = TILE_SIZE * SCALE;
+
+// Логический размер карты (весь уровень)
+const MAP_COLS = 60; 
+const MAP_ROWS = 45;
+
+// Видимая область в формате 16:9 (примерно 16 на 9 тайлов)
+const VIEW_WIDTH_TILES = 16; 
+const VIEW_HEIGHT_TILES = 9;
+
+// Устанавливаем внутреннее разрешение канваса
+canvas.width = VIEW_WIDTH_TILES * SZ;
+canvas.height = VIEW_HEIGHT_TILES * SZ;
+
+let map = [];
+let rooms = [];
+
+function generateSoulKnightMap() {
+    map = Array.from({length: MAP_ROWS}, () => new Array(MAP_COLS).fill(1));
+    rooms = [];
+
+    const minSize = 7;
+    const maxSize = 12;
+    const count = 10;
+
+    for (let i = 0; i < count; i++) {
+        let w = Math.floor(Math.random() * (maxSize - minSize)) + minSize;
+        let h = Math.floor(Math.random() * (maxSize - minSize)) + minSize;
+        let x = Math.floor(Math.random() * (MAP_COLS - w - 2)) + 1;
+        let y = Math.floor(Math.random() * (MAP_ROWS - h - 2)) + 1;
+
+        let newRoom = { x, y, w, h, cx: Math.floor(x + w / 2), cy: Math.floor(y + h / 2) };
+        let intersects = rooms.some(r => !(newRoom.x + newRoom.w + 2 < r.x || newRoom.x > r.x + r.w + 2 || newRoom.y + newRoom.h + 2 < r.y || newRoom.y > r.h + r.y + 2));
+
+        if (!intersects) {
+            for (let ry = newRoom.y; ry < newRoom.y + newRoom.h; ry++) {
+                for (let rx = newRoom.x; rx < newRoom.x + newRoom.w; rx++) {
+                    map[ry][rx] = 0;
+                }
+            }
+            if (rooms.length > 0) {
+                let prev = rooms[rooms.length - 1];
+                createCorridors(prev.cx, prev.cy, newRoom.cx, newRoom.cy);
+            }
+            rooms.push(newRoom);
+        }
+    }
+}
+
+function createCorridors(x1, y1, x2, y2) {
+    let x = x1;
+    let y = y1;
+    while (x !== x2) {
+        map[y][x] = 0;
+        if(y+1 < MAP_ROWS) map[y+1][x] = 0; // ширина 2
+        x += x > x2 ? -1 : 1;
+    }
+    while (y !== y2) {
+        map[y][x] = 0;
+        if(x+1 < MAP_COLS) map[y][x+1] = 0; // ширина 2
+        y += y > y2 ? -1 : 1;
+    }
+}
+
+const player = {
+    x: 0, y: 0,
+    vx: 0, vy: 0,
+    speed: 0.16,
+    flip: false,
+    
+    spawn() {
+        if(rooms.length > 0) {
+            this.x = rooms[0].cx;
+            this.y = rooms[0].cy;
+            this.vx = this.x;
+            this.vy = this.y;
+        }
+    },
+    
+    update(ix, iy) {
+        let nx = this.x + ix * this.speed;
+        let ny = this.y + iy * this.speed;
+        if (!this.checkWall(nx, this.y)) this.x = nx;
+        if (!this.checkWall(this.x, ny)) this.y = ny;
+        if (ix < 0) this.flip = true;
+        if (ix > 0) this.flip = false;
+        this.vx += (this.x - this.vx) * 0.2;
+        this.vy += (this.y - this.vy) * 0.2;
+    },
+
+    checkWall(nx, ny) {
+        const r = 0.35;
+        const pts = [[nx-r, ny-r], [nx+r, ny-r], [nx-r, ny+r], [nx+r, ny+r]];
+        return pts.some(p => map[Math.floor(p[1])][Math.floor(p[0])] === 1);
+    },
+
+    draw(t, camX, camY) {
+        const bounce = Math.sin(t / 120) * 1.5;
+        const dx = (this.vx - camX) * SZ;
+        const dy = (this.vy - camY) * SZ;
+
+        ctx.save();
+        ctx.translate(dx, dy);
+        if (this.flip) ctx.scale(-1, 1);
+
+        // Shadow
+        ctx.fillStyle = "rgba(0,0,0,0.3)";
+        ctx.beginPath(); ctx.ellipse(0, 5*SCALE, 6*SCALE, 3*SCALE, 0, 0, 7); ctx.fill();
+
+        // Knight Body
+        ctx.fillStyle = "#3d3d4e";
+        ctx.fillRect(-5*SCALE, (-4+bounce)*SCALE, 10*SCALE, 9*SCALE);
+        // Helmet
+        ctx.fillStyle = "#bdc3c7";
+        ctx.fillRect(-6*SCALE, (-11+bounce)*SCALE, 12*SCALE, 8*SCALE);
+        // Eyes
+        ctx.fillStyle = "#3498db";
+        ctx.fillRect(this.flip ? -5*SCALE : 1*SCALE, (-8+bounce)*SCALE, 4*SCALE, 2*SCALE);
+
+        ctx.restore();
+    }
+};
+
+const camera = {
+    x: 0, y: 0,
+    update(tx, ty) {
+        let targetCamX = tx - VIEW_WIDTH_TILES / 2;
+        let targetCamY = ty - VIEW_HEIGHT_TILES / 2;
+        this.x = Math.max(0, Math.min(targetCamX, MAP_COLS - VIEW_WIDTH_TILES));
+        this.y = Math.max(0, Math.min(targetCamY, MAP_ROWS - VIEW_HEIGHT_TILES));
+    }
+};
+
+function drawTile(x, y, type) {
+    if (type === 1) {
+        // Wall
+        ctx.fillStyle = "#2c2c36";
+        ctx.fillRect(x, y, SZ, SZ);
+        ctx.fillStyle = "#40404f"; ctx.fillRect(x, y, SZ, 4);
+        ctx.fillStyle = "#1a1a24"; ctx.fillRect(x, y + SZ - 4, SZ, 4);
+    } else {
+        // Floor
+        ctx.fillStyle = "#1a1a24";
+        ctx.fillRect(x, y, SZ, SZ);
+        ctx.strokeStyle = "#22222e";
+        ctx.strokeRect(x, y, SZ, SZ);
+    }
+}
+
+// Joystick logic
+const zone = document.getElementById('joystick-zone');
+const knob = document.getElementById('joystick-knob');
+let joy = { x: 0, y: 0, active: false };
+
+function moveJoy(e) {
+    if (!joy.active) return;
+    const r = zone.getBoundingClientRect();
+    const cx = r.left + r.width/2, cy = r.top + r.height/2;
+    const ex = e.touches ? e.touches[0].clientX : e.clientX;
+    const ey = e.touches ? e.touches[0].clientY : e.clientY;
+    let dx = ex - cx, dy = ey - cy;
+    const d = Math.sqrt(dx*dx + dy*dy);
+    const m = 35;
+    if (d > m) { dx *= m/d; dy *= m/d; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    joy.x = dx / m; joy.y = dy / m;
+}
+
+zone.addEventListener('pointerdown', e => { joy.active = true; moveJoy(e); });
+window.addEventListener('pointermove', moveJoy);
+window.addEventListener('pointerup', () => { joy.active = false; joy.x = 0; joy.y = 0; knob.style.transform = 'translate(0,0)'; });
+
+generateSoulKnightMap();
+player.spawn();
+
+function loop(t) {
+    camera.update(player.vx, player.vy);
+    ctx.clearRect(0,0, canvas.width, canvas.height);
+
+    const sC = Math.floor(camera.x), eC = Math.min(MAP_COLS, sC + VIEW_WIDTH_TILES + 1);
+    const sR = Math.floor(camera.y), eR = Math.min(MAP_ROWS, sR + VIEW_HEIGHT_TILES + 1);
+
+    for(let r=sR; r<eR; r++) {
+        for(let c=sC; c<eC; c++) {
+            drawTile((c - camera.x) * SZ, (r - camera.y) * SZ, map[r][c]);
+        }
+    }
+
+    player.update(joy.active ? joy.x : 0, joy.active ? joy.y : 0);
+    player.draw(t, camera.x, camera.y);
+    requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
+
             const hashBuffer = await crypto.subtle.digest('SHA-256', utf8);
             return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
         }
