@@ -1,22 +1,3 @@
-# kiyotakaxzc34.github.io        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-
-        const firebaseConfig = {
-          apiKey: "AIzaSyDN_-8OnXg_uv9RAy9CtR5YL7WgZYDgIjQ",
-          authDomain: "flappy-pixel-db583.firebaseapp.com",
-          projectId: "flappy-pixel-db583",
-          storageBucket: "flappy-pixel-db583.firebasestorage.app",
-          messagingSenderId: "216270505262",
-          appId: "1:216270505262:web:a19e6f6c2c36931daae6bf",
-          measurementId: "G-M63KPRHTS6"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
-        const appId = "flappy-v9-stable"; 
-
-        async function hash(s) {
-            const utf8 = new TextEncoder().encode(s);
             const hashBuffer = await crypto.subtle.digest('SHA-256', utf8);
             return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
         }
